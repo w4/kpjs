@@ -11,7 +11,7 @@ This protects against physical access to the server at a later date, for example
 
 This does not take into account scripts from other domains and requires all scripts on a page to be signed with a single private key.
 
-Scripts look something like this currently, we'll have to look into something nicer looking (and more compact) at a later date:
+Scripts look something like this currently, we'll have to look into something nicer looking (and more compact) at a later date, detached signatures could be a solution for this:
 
     <script>
     // -----BEGIN PGP SIGNED MESSAGE-----
