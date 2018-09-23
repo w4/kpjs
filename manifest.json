@@ -7,15 +7,21 @@
     {
       "matches": ["<all_urls>"],
       "js": [
-        "bower_components/bluebird/js/browser/bluebird.js",
-        "bower_components/kbpgp/browser/kbpgp.js",
-        "src/index.js"
+        "dist/content.js"
       ],
       "all_frames": true,
       "run_at": "document_start"
     }
   ],
+  "browser_action": {
+    "browser_style": true,
+    "default_title": "CryptoScript",
+    "default_popup": "popup/index.html"
+  },
   "permissions": [
-    "<all_urls>"
+    "<all_urls>",
+    "https://keybase.io/*",
+    "storage",
+    "activeTab"
   ]
 }
