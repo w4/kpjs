@@ -9,9 +9,10 @@ that domain.
 
 You can sign a file with multiple keys, this allows revocation of other keys at a later date.
 
-This protects against physical access to the server at a later date, for example. The JavaScript is
-not signed with the original private key so we will not execute it.
+Keypinned JavaScript could protect against an attacker having physical access to the server. Without
+the GPG key used to sign the scripts on the page the first time the user visits it, the attacker
+will not be able to execute malicious scripts on the client's machine.
 
-Currently we require all scripts to be signed with the same key. To sign a script simply add a
-`data-signature` attribute to your script with a relative or absolute link to the detached signature
-of the script.
+As this is a POC, all scripts on a website are required to be signed with the same key. To sign a script
+simply add a `data-signature` attribute to your script with a relative or absolute link to the detached
+signature of the script.
