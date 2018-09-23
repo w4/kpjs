@@ -1,10 +1,18 @@
-import { KeyManager, KeyFetcher, Buffer } from 'kbpgp';
-import * as P from 'bluebird';
+import * as P from "bluebird";
+import { Buffer, KeyFetcher, KeyManager } from "kbpgp";
 
-const import_from_armored_pgp = P.promisify<KeyManager, any>(KeyManager.import_from_armored_pgp, {context: KeyManager});
+const importFromArmoredPgp = P.promisify<KeyManager, { armored: string }>(KeyManager.import_from_armored_pgp, {
+    context: KeyManager
+});
 
 export default class KeyRing extends KeyFetcher {
-    private allKeyIdsForDomainFromKeybase: {[kid: string]: { keyManager: KeyManager, key: any, keybaseUser: string }} = {};
+    private allKeyIdsForDomainFromKeybase: {
+        [kid: string]: {
+            keyManager: KeyManager;
+            key: any;
+            keybaseUser: string;
+        };
+    } = {};
 
     private trustedUsers: string[] = [];
     private barredUsers: string[] = [];
@@ -13,19 +21,51 @@ export default class KeyRing extends KeyFetcher {
         super();
     }
 
-    getKeybaseUsers() {
-        return [...new Set(Object.values(this.allKeyIdsForDomainFromKeybase).map((k) => k.keybaseUser))];
+    /**
+     * Get all the Keybase users that have this domain registered to their account and that
+     * we have allowed/denied for this domain before.
+     */
+    public async getKeybaseUsers(): Promise<string[]> {
+        await this.populateKeysForDomain();
+
+        return [
+            ...new Set([
+                ...Object.values(this.allKeyIdsForDomainFromKeybase).map(k => k.keybaseUser),
+                ...(await this.getTrustedUsers()),
+                ...(await this.getBarredUsers())
+            ])
+        ];
     }
 
-    getTrustedUsers() {
+    /**
+     * Get users that have been previously allowed to run scripts
+     * on the `domain` that was used to instantiate this KeyRing.
+     */
+    public async getTrustedUsers(): Promise<string[]> {
+        await this.populateKeysForDomain();
+
         return this.trustedUsers;
     }
 
-    getBarredUsers() {
+    /**
+     * Get users that have been previously been barred from running scripts
+     * on the `domain` that was used to instantiate this KeyRing.
+     */
+    public async getBarredUsers(): Promise<string[]> {
+        await this.populateKeysForDomain();
+
         return this.barredUsers;
     }
 
-    async fetch(ids: Buffer[], ops: any, cb: (err: Error | null, km?: any, keyId?: number) => void) {
+    /**
+     * Ran by KBPGP to match a key id to a public key. Throws an error if
+     * the signer isn't a "trusted" Keybase user
+     *
+     * @param ids ids to find a public key for
+     * @param ops operations that the key should be allowed to run
+     * @param cb callback to KBPGP
+     */
+    public async fetch(ids: Buffer[], ops: any, cb: (err: Error | null, km?: any, keyId?: number) => void) {
         try {
             await this.populateKeysForDomain();
         } catch (e) {
@@ -34,13 +74,18 @@ export default class KeyRing extends KeyFetcher {
 
         const hexKeyIds = ids.map((f: any) => f.toString("hex"));
 
+        // c-style loop because KBPGP wants an index of `ids` in the callback
         for (let i = 0; i < hexKeyIds.length; i++) {
             const kid = hexKeyIds[i];
             const k = this.allKeyIdsForDomainFromKeybase[kid];
 
             if (k && k.key && k.key.key) {
                 if (this.barredUsers.includes(k.keybaseUser)) {
-                    return cb(new Error(`Keybase user ${k.keybaseUser} is barred from signing scripts from ${this.domain}`), k.keyManager, i);
+                    return cb(
+                        new Error(`Keybase user ${k.keybaseUser} is barred from signing scripts from ${this.domain}`),
+                        k.keyManager,
+                        i
+                    );
                 } else if (this.trustedUsers.includes(k.keybaseUser) && k.key.key.can_perform(ops)) {
                     console.debug(`Allowing script from ${this.domain} to run as it was signed by ${k.keybaseUser}`);
                     return k.keyManager.fetch(ids, ops, cb);
@@ -51,6 +96,11 @@ export default class KeyRing extends KeyFetcher {
         return cb(new Error(`Key not found: ${JSON.stringify(hexKeyIds)}`));
     }
 
+    /**
+     * Searches Keybase for 'owners' of this domain, asks the user if they'd like
+     * to trust them to run scripts if they haven't seen this 'owner' before and then
+     * stores them all keyed by pgp key id for easy lookup in `fetch`.
+     */
     private async populateKeysForDomain(): Promise<void> {
         if (Object.entries(this.allKeyIdsForDomainFromKeybase).length) {
             return;
@@ -73,7 +123,9 @@ export default class KeyRing extends KeyFetcher {
             }
 
             // @ts-ignore
-            const keyManagers = (await Promise.all(user.public_keys.pgp_public_keys.map((armored) => import_from_armored_pgp({ armored })))) as KeyManager[];
+            const keyManagers = (await Promise.all(
+                user.public_keys.pgp_public_keys.map((armored: any) => importFromArmoredPgp({ armored }))
+            )) as KeyManager[];
 
             for (const km of keyManagers) {
                 const keys = km.export_pgp_keys_to_keyring();
@@ -82,8 +134,8 @@ export default class KeyRing extends KeyFetcher {
                     const kid = key.key_material.get_key_id().toString("hex");
 
                     this.allKeyIdsForDomainFromKeybase[kid] = {
-                        keyManager: km,
                         key,
+                        keyManager: km,
                         keybaseUser: username
                     };
                 }
@@ -93,6 +145,9 @@ export default class KeyRing extends KeyFetcher {
         await this.storeUsersInStorage();
     }
 
+    /**
+     * Load previously "seen" Keybase users from local storage.
+     */
     private async loadUsersFromStorage() {
         const trustedUsersStorageKey = `kpj_trusted_signers_${this.domain}`;
         const barredUsersStorageKey = `kpj_barred_signers_${this.domain}`;
@@ -115,6 +170,10 @@ export default class KeyRing extends KeyFetcher {
         }
     }
 
+    /**
+     * Store "seen" Keybase users in storage so we don't have to keep asking the user
+     * if they'd like to run scripts from them for this domain.
+     */
     private async storeUsersInStorage() {
         const trustedUsersStorageKey = `kpj_trusted_signers_${this.domain}`;
         const barredUsersStorageKey = `kpj_barred_signers_${this.domain}`;
@@ -125,12 +184,29 @@ export default class KeyRing extends KeyFetcher {
         });
     }
 
+    /**
+     * Checks if the user has previously trusted/barred scripts from the given
+     * Keybase user for this domain before.
+     *
+     * @param user keybase user to check
+     */
     private hasPreviouslySeenKeybaseUser(user: string): boolean {
         return [...this.trustedUsers, ...this.barredUsers].includes(user);
     }
 
+    /**
+     * Ask the user whether or not they'd like to run scripts from the given Keybase user.
+     *
+     * @param keybaseUser keybaseUser to ask permission for
+     */
     private getTreatmentForKeybaseUser(keybaseUser: string): boolean {
-        if (window.confirm(`Since you last ran JavaScript from the domain ${this.domain}, ${keybaseUser} has claimed ownership on Keybase. Would you like to allow JavaScript from this domain to be signed by this user?`)) {
+        if (
+            window.confirm(
+                `Since you last ran JavaScript from the domain ${
+                    this.domain
+                }, ${keybaseUser} has claimed ownership on Keybase. Would you like to allow JavaScript from this domain to be signed by this user?`
+            )
+        ) {
             return true;
         } else {
             return false;

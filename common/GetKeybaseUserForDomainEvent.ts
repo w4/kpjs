@@ -11,5 +11,9 @@ export class GetKeybaseUserForDomainEvent extends IEvent {
 type KeybaseUser = string;
 
 export class GetKeybaseUserForDomainResponse {
-    constructor(public readonly keybaseUsers: KeybaseUser[], public readonly trusted: KeybaseUser[], public readonly barred: KeybaseUser[]) {}
+    constructor(
+        public readonly keybaseUsers: KeybaseUser[],
+        public readonly trusted: KeybaseUser[],
+        public readonly barred: KeybaseUser[]
+    ) {}
 }

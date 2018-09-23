@@ -22,10 +22,14 @@
     "@types/react-router-dom": "^4.3.1",
     "css-loader": "^1.0.0",
     "node-sass": "^4.9.3",
+    "prettier": "^1.14.3",
     "sass-loader": "^7.1.0",
     "style-loader": "^0.23.0",
     "ts-loader": "^5.1.1",
+    "tslint": "^5.11.0",
+    "tslint-config-prettier": "^1.15.0",
     "typescript": "^3.0.3",
+    "typestrict": "^1.0.0",
     "url-loader": "^1.1.1",
     "web-ext": "^2.9.1",
     "web-ext-types": "^2.1.0",
@@ -36,14 +40,17 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build-w": "webpack --display-error-details --progress --colors -w",
     "build": "webpack --display-error-details --progress --colors",
-    "start": "web-ext run"
+    "start": "web-ext run",
+    "fmt": "prettier --list-different {common,src,popup}/**/*.{ts,tsx}",
+    "lint": "tslint -c ./tslint.json --project ./tsconfig.json --format stylish '{common,src,popup}/**/*.{ts,tsx}'",
+    "fix": "npm run fmt -- --write; npm run lint -- --fix"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/w4/keypinned-javascript.git"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "Jordan Doyle <jordan@doyle.la>",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/w4/keypinned-javascript/issues"
   },
