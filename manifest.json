@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "name": "CryptoScript",
+  "version": "1.0",
+  "description": "A basic POC for GPG signed JavaScript with key pinning.",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "bower_components/bluebird/js/browser/bluebird.js",
+        "bower_components/kbpgp/browser/kbpgp.js",
+        "src/index.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_start"
+    }
+  ],
+  "permissions": [
+    "<all_urls>"
+  ]
+}

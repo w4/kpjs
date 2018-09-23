@@ -1,0 +1,22 @@
+{
+  "name": "keypinned-javascript",
+  "homepage": "https://github.com/w4/keypinned-javascript",
+  "authors": [
+    "Jordan Doyle <jordan@9t9t9.com>"
+  ],
+  "description": "",
+  "main": "",
+  "license": "MIT",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "kbpgp": "https://github.com/JordanForks/kbpgp.git#master",
+    "bluebird": "^3.5.1"
+  }
+}
