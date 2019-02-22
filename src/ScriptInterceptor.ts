@@ -80,7 +80,7 @@ export default new class ScriptInterceptor implements EventListenerObject {
      * Instead of allowing/denying Keybase users by *script* domain we should allow/deny
      * by *website*, if one script on the page is signed they all must be signed. We need
      * to streamline this process somehow so the user can be told who they trust on their
-     * first visit through a meta tag or something and then pin that.
+     * first visit through a meta tag or something and then pin that. (could CSP help here?)
      *
      * @param script script to verify signature of
      * @param scriptContent content of the script that should be signed
