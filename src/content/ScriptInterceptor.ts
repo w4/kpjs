@@ -5,7 +5,6 @@ import { GetKeybaseUserForDomainEvent, GetKeybaseUserForDomainResponse } from ".
 import { IEvent } from "../common/IEvent";
 import KeyRing from "./KeyRing";
 import { fetch } from "./util";
-import { ScriptInterceptedEvent } from "../common/ScriptInterceptedEvent";
 
 const unbox = P.promisify<any, any>(unboxSync);
 
@@ -48,7 +47,7 @@ export default new class ScriptInterceptor implements EventListenerObject {
         try {
             const scriptContent = await this.getScriptContent(script);
 
-            const domain = new URL(script.src || (window as any).location.href).hostname;
+            const domain = new URL((window as any).location.href).hostname;
 
             if (await this.verifySignature(script, scriptContent, domain)) {
                 // in firefox calling eval on "window" executes in the context of the page thankfully
@@ -76,12 +75,6 @@ export default new class ScriptInterceptor implements EventListenerObject {
      * If the domain the script is loaded from doesn't have an owner on Keybase
      * then it is currently always executed. If the domain does have an owner
      * then all scripts from the domain must be loaded from them.
-     *
-     * TODO: this is unsecure, KPJS is bypassable by just hosting your JS elsewhere.
-     * Instead of allowing/denying Keybase users by *script* domain we should allow/deny
-     * by *website*, if one script on the page is signed they all must be signed. We need
-     * to streamline this process somehow so the user can be told who they trust on their
-     * first visit through a meta tag or something and then pin that. (could CSP help here?)
      *
      * @param script script to verify signature of
      * @param scriptContent content of the script that should be signed
