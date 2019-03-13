@@ -13,10 +13,13 @@
       "run_at": "document_start"
     }
   ],
+  "background": {
+    "scripts": ["dist/background.js"]
+  },
   "browser_action": {
     "browser_style": true,
     "default_title": "CryptoScript",
-    "default_popup": "popup/index.html"
+    "default_popup": "src/popup/index.html"
   },
   "permissions": [
     "<all_urls>",

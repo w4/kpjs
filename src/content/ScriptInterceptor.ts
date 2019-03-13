@@ -5,6 +5,7 @@ import { GetKeybaseUserForDomainEvent, GetKeybaseUserForDomainResponse } from ".
 import { IEvent } from "../common/IEvent";
 import KeyRing from "./KeyRing";
 import { fetch } from "./util";
+import { ScriptInterceptedEvent } from "../common/ScriptInterceptedEvent";
 
 const unbox = P.promisify<any, any>(unboxSync);
 
