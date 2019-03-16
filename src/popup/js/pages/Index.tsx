@@ -2,6 +2,7 @@ import * as React from 'react';
 import { GetKeybaseUserForDomainEvent, GetKeybaseUserForDomainResponse } from "../../../common/GetKeybaseUserForDomainEvent";
 
 import { Row } from "../components/Row";
+import { GetUsersAwaitingConsentEvent, GetUsersAwaitingConsentResponse, AllowUserEvent, DeniedUserEvent } from '../../../common/GetUsersAwaitingConsentEvent';
 
 interface ToolbarProps {
 }
@@ -10,20 +11,9 @@ interface ToolbarState {
     domain: string,
     keybaseUsers: string[],
     trustedUsers: string[],
-    barredUsers: string[]
+    barredUsers: string[],
+    needsApproval: string[]
 }
-
-const WriteUsersList = (props: { header: string, users: string[] }) => {
-    if (props.users.length) {
-        return <Row header={ props.header }>
-            <ul>
-                { props.users.map((u) => <li>{ u }</li>) }
-            </ul>
-        </Row>;
-    } else {
-        return <div />;
-    }
-};
 
 export class Index extends React.Component<ToolbarProps, ToolbarState> {
     constructor(props: any) {
@@ -32,7 +22,8 @@ export class Index extends React.Component<ToolbarProps, ToolbarState> {
             domain: "",
             keybaseUsers: [],
             trustedUsers: [],
-            barredUsers: []
+            barredUsers: [],
+            needsApproval: []
         };
     }
 
@@ -44,20 +35,63 @@ export class Index extends React.Component<ToolbarProps, ToolbarState> {
 
         this.setState({ domain });
 
-        await browser.tabs.sendMessage(activeTab.id, new GetKeybaseUserForDomainEvent(domain))
+        await this.updateUsers();
+    }
+
+    async updateUsers() {
+        const [ activeTab ] = await browser.tabs.query({ active: true });
+
+        await browser.tabs.sendMessage(activeTab.id, new GetKeybaseUserForDomainEvent(this.state.domain))
             .then((res: GetKeybaseUserForDomainResponse) => {
                 this.setState({
                     keybaseUsers: res.keybaseUsers,
                     trustedUsers: res.trusted,
-                    barredUsers: res.barred
+                    barredUsers: res.barred,
+                    needsApproval: res.pending
                 });
             });
     }
 
+    approve = async (user: string) => {
+        const [ activeTab ] = await browser.tabs.query({ active: true });
+        browser.tabs.sendMessage(activeTab.id, new AllowUserEvent(this.state.domain, user))
+            .then(this.updateUsers.bind(this));
+    }
+
+    deny = async (user: string) => {
+        const [ activeTab ] = await browser.tabs.query({ active: true });
+        browser.tabs.sendMessage(activeTab.id, new DeniedUserEvent(this.state.domain, user))
+            .then(this.updateUsers.bind(this));
+    }
+
     render() {
         return <div className="container">
-            <WriteUsersList header="Trusted Keybase Users" users={ this.state.trustedUsers } />
-            <WriteUsersList header="Barred Keybase Users" users={ this.state.barredUsers } />
+            <Row header="Trusted Keybase Users">
+                <ul>
+                    { this.state.trustedUsers.map((u) => <li>
+                        { u }&nbsp;
+                        <a href="#" onClick={ e => this.deny(u) } style={{ color: '#F44336' }}>deny</a>
+                    </li>) }
+                </ul>
+            </Row>
+            <Row header="Barred Keybase Users">
+                <ul>
+                    { this.state.barredUsers.map((u) => <li>
+                        { u }&nbsp;
+                        <a href="#" onClick={ e => this.approve(u) } style={{ color: '#4CAF50' }}>approve</a>
+                    </li>) }
+                </ul>
+            </Row>
+            <Row header="Needs Approval">
+                <ul>
+                    { this.state.needsApproval.map((u) => <li>
+                        { u }&nbsp;
+                        <a href="#" onClick={ e => this.approve(u) } style={{ color: '#4CAF50' }}>approve</a>&nbsp;
+                        <a href="#" onClick={ e => this.deny(u) } style={{ color: '#F44336' }}>deny</a>
+                    </li>) }
+                </ul>
+            </Row>
+
         </div>;
     }
 }

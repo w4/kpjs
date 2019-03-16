@@ -5,27 +5,42 @@ import { GetKeybaseUserForDomainEvent, GetKeybaseUserForDomainResponse } from ".
 import { IEvent } from "../common/IEvent";
 import KeyRing from "./KeyRing";
 import { fetch } from "./util";
+import { GetUsersAwaitingConsentEvent, GetUsersAwaitingConsentResponse, AllowUserEvent, DeniedUserEvent } from "../common/GetUsersAwaitingConsentEvent";
+import { Script } from "../common/Script";
+import { PendingSignerError } from "./PendingSignerError";
 
 const unbox = P.promisify<any, any>(unboxSync);
 
 export default new class ScriptInterceptor implements EventListenerObject {
     private keyRingCache: { [domain: string]: KeyRing } = {};
 
+    private lock: boolean = false;
+    private scriptQueue: HTMLScriptElement[] = [];
+
     constructor() {
         browser.runtime.onMessage.addListener(async (message: IEvent) => {
             if (message.TYPE === GetKeybaseUserForDomainEvent.TYPE) {
                 const event = message as GetKeybaseUserForDomainEvent;
-                const keyRing = this.keyRingCache[event.domain];
+                const keyRing = this.getKeyRingForDomain(event.domain);
 
-                if (keyRing) {
-                    return new GetKeybaseUserForDomainResponse(
-                        await keyRing.getKeybaseUsers(),
-                        await keyRing.getTrustedUsers(),
-                        await keyRing.getBarredUsers()
-                    );
-                } else {
-                    return new GetKeybaseUserForDomainResponse([], [], []);
-                }
+                return new GetKeybaseUserForDomainResponse(
+                    await keyRing.getKeybaseUsers(),
+                    await keyRing.getTrustedUsers(),
+                    await keyRing.getBarredUsers(),
+                    await keyRing.getPendingApproval()
+                );
+            } else if (message.TYPE === GetUsersAwaitingConsentEvent.TYPE) {
+                const event = message as GetUsersAwaitingConsentEvent;
+                const keyRing = this.getKeyRingForDomain(event.domain);
+                return new GetUsersAwaitingConsentResponse(await keyRing.getPendingApproval());
+            } else if (message.TYPE === AllowUserEvent.TYPE) {
+                const event = message as AllowUserEvent;
+                this.getKeyRingForDomain(event.domain).addTrustedUser(event.user);
+                await this.drainScriptQueue();
+            } else if (message.TYPE === DeniedUserEvent.TYPE) {
+                const event = message as DeniedUserEvent;
+                this.getKeyRingForDomain(event.domain).addBarredUser(event.user);
+                await this.drainScriptQueue();
             }
         });
     }
@@ -44,18 +59,98 @@ export default new class ScriptInterceptor implements EventListenerObject {
         // the script tag that we stopped from running
         const script = e.target as HTMLScriptElement;
 
+        const monitor = setInterval(async () => {
+            if (this.lock) return;
+
+            try {
+                this.lock = true;
+
+                await this.checkPermissionMaybeExecute(script);
+            } catch (e) {
+                console.error(`Execution of script (${script.src || "inline"}) failed. ${e.name}: ${e.message}`, e.stack);
+                throw e;
+            } finally {
+                this.lock = false;
+                clearInterval(monitor);
+            }
+        }, 10);
+    }
+
+    private async checkPermissionMaybeExecute(script: HTMLScriptElement) {
+        const scriptContent = await this.getScriptContent(script);
+
+        const domain = new URL((window as any).location.href).hostname;
+
+        if (this.scriptQueue.length > 0) {
+            this.scriptQueue.push(script);
+            script.parentNode.removeChild(script);
+            return;
+        }
+
         try {
-            const scriptContent = await this.getScriptContent(script);
-
-            const domain = new URL((window as any).location.href).hostname;
-
             if (await this.verifySignature(script, scriptContent, domain)) {
                 // in firefox calling eval on "window" executes in the context of the page thankfully
                 (window as any).eval(scriptContent);
+            } else {
+                script.parentNode.removeChild(script);
             }
         } catch (e) {
-            console.error(`Execution of script (${script.src || "inline"}) failed. ${e.name}: ${e.message}`, e.stack);
-            throw e;
+            if (e instanceof PendingSignerError) {
+                this.scriptQueue.push(script);
+                script.parentNode.removeChild(script);
+            } else {
+                throw e;
+            }
+        }
+    }
+
+    private async drainScriptQueue() {
+        const domain = new URL((window as any).location.href).hostname;
+
+        while (this.scriptQueue.length > 0) {
+            const script = this.scriptQueue.shift();
+
+            try {
+                const scriptContent = await this.getScriptContent(script);
+
+                if (await this.verifySignature(script, scriptContent, domain)) {
+                    (window as any).eval(scriptContent);
+                } else {
+                    console.log(`Script depends on a blocked signer, there's still ${this.scriptQueue.length} elements left in the script queue.`);
+                    this.scriptQueue.unshift(script);
+                    return;
+                }
+            } catch (e) {
+                if (e instanceof PendingSignerError) {
+                    this.scriptQueue.unshift(script);
+                    console.log(`Script depends on a pending signer, there's still ${this.scriptQueue.length} elements left in the script queue.`);
+                    return;
+                } else {
+                    this.scriptQueue.unshift(script);
+                    throw e;
+                }
+            }
+        }
+
+        for (const script of this.scriptQueue) {
+            try {
+                const scriptContent = await this.getScriptContent(script);
+
+                if (await this.verifySignature(script, scriptContent, domain)) {
+                    (window as any).eval(scriptContent);
+                    this.scriptQueue.shift();
+                } else {
+                    console.log(`Script depends on a blocked signer, there's still ${this.scriptQueue.length} elements left in the script queue.`);
+                    return;
+                }
+            } catch (e) {
+                if (e instanceof PendingSignerError) {
+                    console.log(`Script depends on a pending signer, there's still ${this.scriptQueue.length} elements left in the script queue.`);
+                    return;
+                } else {
+                    throw e;
+                }
+            }
         }
     }
 
@@ -82,6 +177,12 @@ export default new class ScriptInterceptor implements EventListenerObject {
      * @throws Error if signature verification fails
      */
     private async verifySignature(script: HTMLScriptElement, scriptContent: string, domain: string): Promise<boolean> {
+        const signaturePath = script.dataset.signature;
+
+        if (!signaturePath) {
+            return await this.getTreatmentForUnsignedScripts(domain);
+        }
+
         const keyRing = this.getKeyRingForDomain(domain);
 
         if (!(await keyRing.getKeybaseUsers()).length) {
@@ -90,7 +191,7 @@ export default new class ScriptInterceptor implements EventListenerObject {
             return true;
         }
 
-        const signatureContent = await this.getSignatureFromScript(script);
+        const signatureContent = await (await fetch(signaturePath)).text();
 
         const literals = await unbox({
             armored: new KbpgpBuffer(signatureContent),
@@ -125,19 +226,19 @@ export default new class ScriptInterceptor implements EventListenerObject {
     }
 
     /**
-     * Get signature of the script from the `data-signature` attribute.
-     *
-     * @param script script to get signature of
-     * @throws Error if script is not signed
+     * Ask the user whether or not they'd like to run unsigned scripts.
      */
-    private async getSignatureFromScript(script: HTMLScriptElement): Promise<string> {
-        const signaturePath = script.dataset.signature;
+    private async getTreatmentForUnsignedScripts(domain: string): Promise<boolean> {
+        const storageKey = `kpj_unsigned_scripts_${domain}`;
 
-        if (!signaturePath) {
-            throw new Error(`Script not signed (no data-signature attribute)`);
+        const storedAnswer = (await browser.storage.local.get(storageKey))[storageKey];
+
+        if (storedAnswer !== undefined) {
+            return !!storedAnswer;
+        } else {
+            const confirmation = !!window.confirm('There are unsigned scripts on this website, would you like to run them?');
+            await browser.storage.local.set({ [storageKey]: confirmation });
+            return confirmation;
         }
-
-        const signatureRequest = await Promise.resolve(fetch(signaturePath));
-        return await signatureRequest.text();
     }
 }();

@@ -1,5 +1,6 @@
 import * as P from "bluebird";
 import { Buffer, KeyFetcher, KeyManager } from "kbpgp";
+import { PendingSignerError } from "./PendingSignerError";
 
 const importFromArmoredPgp = P.promisify<KeyManager, { armored: string }>(KeyManager.import_from_armored_pgp, {
     context: KeyManager
@@ -16,6 +17,7 @@ export default class KeyRing extends KeyFetcher {
 
     private trustedUsers: string[] = [];
     private barredUsers: string[] = [];
+    private pendingApproval: string[] = [];
 
     constructor(private domain: string) {
         super();
@@ -47,6 +49,13 @@ export default class KeyRing extends KeyFetcher {
         return this.trustedUsers;
     }
 
+    public addTrustedUser(user: string) {
+        this.pendingApproval = this.pendingApproval.filter(v => v !== user);
+        this.barredUsers = this.barredUsers.filter(v => v !== user);
+        this.trustedUsers.push(user);
+        this.storeUsersInStorage();
+    }
+
     /**
      * Get users that have been previously been barred from running scripts
      * on the `domain` that was used to instantiate this KeyRing.
@@ -55,6 +64,19 @@ export default class KeyRing extends KeyFetcher {
         await this.populateKeysForDomain();
 
         return this.barredUsers;
+    }
+
+    public addBarredUser(user: string) {
+        this.pendingApproval = this.pendingApproval.filter(v => v !== user);
+        this.trustedUsers = this.trustedUsers.filter(v => v !== user);
+        this.barredUsers.push(user);
+        this.storeUsersInStorage();
+    }
+
+    public async getPendingApproval(): Promise<string[]> {
+        await this.populateKeysForDomain();
+
+        return this.pendingApproval;
     }
 
     /**
@@ -83,6 +105,12 @@ export default class KeyRing extends KeyFetcher {
                 if (this.barredUsers.includes(k.keybaseUser)) {
                     return cb(
                         new Error(`Keybase user ${k.keybaseUser} is barred from signing scripts from ${this.domain}`),
+                        k.keyManager,
+                        i
+                    );
+                } else if (this.pendingApproval.includes(k.keybaseUser)) {
+                    return cb(
+                        new PendingSignerError(`Keybase user ${k.keybaseUser} is not yet approved for script signing on ${this.domain}`),
                         k.keyManager,
                         i
                     );
@@ -115,11 +143,7 @@ export default class KeyRing extends KeyFetcher {
             const username = user.basics.username;
 
             if (!this.hasPreviouslySeenKeybaseUser(username)) {
-                if (this.getTreatmentForKeybaseUser(username)) {
-                    this.trustedUsers.push(username);
-                } else {
-                    this.barredUsers.push(username);
-                }
+                this.pendingApproval.push(username);
             }
 
             // @ts-ignore
@@ -192,24 +216,5 @@ export default class KeyRing extends KeyFetcher {
      */
     private hasPreviouslySeenKeybaseUser(user: string): boolean {
         return [...this.trustedUsers, ...this.barredUsers].includes(user);
-    }
-
-    /**
-     * Ask the user whether or not they'd like to run scripts from the given Keybase user.
-     *
-     * @param keybaseUser keybaseUser to ask permission for
-     */
-    private getTreatmentForKeybaseUser(keybaseUser: string): boolean {
-        if (
-            window.confirm(
-                `Since you last ran JavaScript from the domain ${
-                    this.domain
-                }, ${keybaseUser} has claimed ownership on Keybase. Would you like to allow JavaScript from this domain to be signed by this user?`
-            )
-        ) {
-            return true;
-        } else {
-            return false;
-        }
     }
 }

@@ -14,6 +14,7 @@ export class GetKeybaseUserForDomainResponse {
     constructor(
         public readonly keybaseUsers: KeybaseUser[],
         public readonly trusted: KeybaseUser[],
-        public readonly barred: KeybaseUser[]
+        public readonly barred: KeybaseUser[],
+        public readonly pending: KeybaseUser[],
     ) {}
 }
