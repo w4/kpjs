@@ -3,7 +3,8 @@ const path = require('path');
 module.exports = {
     entry: {
         content: './src/content/index.ts',
-        popup: './src/popup/js/index.tsx'
+        popup: './src/popup/js/index.tsx',
+        options: './src/options/js/index.tsx',
     },
     devtool: 'inline-source-map',
     module: {

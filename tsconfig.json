@@ -7,7 +7,7 @@
     "target": "es6",
     "allowJs": true,
     "moduleResolution": "node",
-    "lib": ["esnext", "dom"],
+    "lib": ["esnext", "dom", "es2017"],
     "jsx": "react",
     "allowSyntheticDefaultImports": true,
     "typeRoots": ["node_modules/@types", "node_modules/web-ext-types"]

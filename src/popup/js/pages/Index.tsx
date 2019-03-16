@@ -2,7 +2,10 @@ import * as React from 'react';
 import { GetKeybaseUserForDomainEvent, GetKeybaseUserForDomainResponse } from "../../../common/GetKeybaseUserForDomainEvent";
 
 import { Row } from "../components/Row";
-import { GetUsersAwaitingConsentEvent, GetUsersAwaitingConsentResponse, AllowUserEvent, DeniedUserEvent } from '../../../common/GetUsersAwaitingConsentEvent';
+import { AllowUserEvent, DeniedUserEvent } from '../../../common/GetUsersAwaitingConsentEvent';
+import Avatar from '@material-ui/core/Avatar';
+import Chip from '@material-ui/core/Chip';
+import FaceIcon from '@material-ui/icons/Face';
 
 interface ToolbarProps {
 }
@@ -67,12 +70,18 @@ export class Index extends React.Component<ToolbarProps, ToolbarState> {
     render() {
         return <div className="container">
             <Row header="Trusted Keybase Users">
-                <ul>
-                    { this.state.trustedUsers.map((u) => <li>
-                        { u }&nbsp;
-                        <a href="#" onClick={ e => this.deny(u) } style={{ color: '#F44336' }}>deny</a>
-                    </li>) }
-                </ul>
+                { this.state.trustedUsers.map((u) => (
+                    <Chip
+                        avatar={
+                            <Avatar>
+                                <FaceIcon />
+                            </Avatar>
+                        }
+                        color="primary"
+                        label={u}
+                        onClick={() => alert('clicked')}
+                        onDelete={() => this.deny(u)} />
+                )) }
             </Row>
             <Row header="Barred Keybase Users">
                 <ul>

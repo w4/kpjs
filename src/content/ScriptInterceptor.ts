@@ -8,6 +8,7 @@ import { fetch } from "./util";
 import { GetUsersAwaitingConsentEvent, GetUsersAwaitingConsentResponse, AllowUserEvent, DeniedUserEvent } from "../common/GetUsersAwaitingConsentEvent";
 import { Script } from "../common/Script";
 import { PendingSignerError } from "./PendingSignerError";
+import { getConfig, ConfigKey } from "../common/config";
 
 const unbox = P.promisify<any, any>(unboxSync);
 
@@ -131,27 +132,6 @@ export default new class ScriptInterceptor implements EventListenerObject {
                 }
             }
         }
-
-        for (const script of this.scriptQueue) {
-            try {
-                const scriptContent = await this.getScriptContent(script);
-
-                if (await this.verifySignature(script, scriptContent, domain)) {
-                    (window as any).eval(scriptContent);
-                    this.scriptQueue.shift();
-                } else {
-                    console.log(`Script depends on a blocked signer, there's still ${this.scriptQueue.length} elements left in the script queue.`);
-                    return;
-                }
-            } catch (e) {
-                if (e instanceof PendingSignerError) {
-                    console.log(`Script depends on a pending signer, there's still ${this.scriptQueue.length} elements left in the script queue.`);
-                    return;
-                } else {
-                    throw e;
-                }
-            }
-        }
     }
 
     /**
@@ -179,16 +159,24 @@ export default new class ScriptInterceptor implements EventListenerObject {
     private async verifySignature(script: HTMLScriptElement, scriptContent: string, domain: string): Promise<boolean> {
         const signaturePath = script.dataset.signature;
 
-        if (!signaturePath) {
-            return await this.getTreatmentForUnsignedScripts(domain);
-        }
-
         const keyRing = this.getKeyRingForDomain(domain);
 
         if (!(await keyRing.getKeybaseUsers()).length) {
-            // domain has no owner on Keybase, allow all scripts to run from it until
-            // we figure out how we're going to handle this nicely (config option probably)
-            return true;
+            if (await this.getTreatmentForUnsignedDomain(domain)) {
+                return true;
+            } else {
+                console.warn(`Blocking script from ${domain} as it is not owned by a Keybase user and unclaimed, unsigned scripts are blocked.`);
+                return false;
+            }
+        }
+
+        if (!signaturePath) {
+            if (await this.getTreatmentForMixedUnsignedScripts(domain)) {
+                return true;
+            } else {
+                console.warn(`Blocking script from ${domain} as the domain is owned by a Keybase user but the script isn't signed.`);
+                return false;
+            }
         }
 
         const signatureContent = await (await fetch(signaturePath)).text();
@@ -225,19 +213,43 @@ export default new class ScriptInterceptor implements EventListenerObject {
         }
     }
 
-    /**
-     * Ask the user whether or not they'd like to run unsigned scripts.
-     */
-    private async getTreatmentForUnsignedScripts(domain: string): Promise<boolean> {
-        const storageKey = `kpj_unsigned_scripts_${domain}`;
+    private async getTreatmentForUnsignedDomain(domain: string): Promise<boolean> {
+        const storageKey = `kpj_unsigned_domain_${domain}`;
 
-        const storedAnswer = (await browser.storage.local.get(storageKey))[storageKey];
+        const storedAnswer = (await browser.storage.sync.get(storageKey))[storageKey];
 
         if (storedAnswer !== undefined) {
             return !!storedAnswer;
         } else {
+            const allowUnsignedDomainConfig = await getConfig(ConfigKey.ALLOW_UNSIGNED_DOMAINS);
+            if (allowUnsignedDomainConfig !== 'ask') {
+                return allowUnsignedDomainConfig === 'yes';
+            }
+
+            const confirmation = !!window.confirm('There is no owner for this domain on Keybase, would you like to run scripts from it?');
+            await browser.storage.sync.set({ [storageKey]: confirmation });
+            return confirmation;
+        }
+    }
+
+    /**
+     * Ask the user whether or not they'd like to run unsigned scripts.
+     */
+    private async getTreatmentForMixedUnsignedScripts(domain: string): Promise<boolean> {
+        const storageKey = `kpj_mixed_unsigned_scripts_${domain}`;
+
+        const storedAnswer = (await browser.storage.sync.get(storageKey))[storageKey];
+
+        if (storedAnswer !== undefined) {
+            return !!storedAnswer;
+        } else {
+            const allowMixedScriptsConfig = await getConfig(ConfigKey.ALLOW_MIXED_SCRIPTS);
+            if (allowMixedScriptsConfig !== 'ask') {
+                return allowMixedScriptsConfig === 'yes';
+            }
+
             const confirmation = !!window.confirm('There are unsigned scripts on this website, would you like to run them?');
-            await browser.storage.local.set({ [storageKey]: confirmation });
+            await browser.storage.sync.set({ [storageKey]: confirmation });
             return confirmation;
         }
     }

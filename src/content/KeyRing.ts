@@ -1,6 +1,7 @@
 import * as P from "bluebird";
 import { Buffer, KeyFetcher, KeyManager } from "kbpgp";
 import { PendingSignerError } from "./PendingSignerError";
+import { getConfig, ConfigKey } from "../common/config";
 
 const importFromArmoredPgp = P.promisify<KeyManager, { armored: string }>(KeyManager.import_from_armored_pgp, {
     context: KeyManager
@@ -134,7 +135,7 @@ export default class KeyRing extends KeyFetcher {
             return;
         }
 
-        await this.loadUsersFromStorage();
+        const firstLoad = !await this.loadUsersFromStorage();
 
         const res = await fetch(`https://keybase.io/_/api/1.0/user/lookup.json?domain=${this.domain}`);
         const users = await res.json();
@@ -143,7 +144,13 @@ export default class KeyRing extends KeyFetcher {
             const username = user.basics.username;
 
             if (!this.hasPreviouslySeenKeybaseUser(username)) {
-                this.pendingApproval.push(username);
+                const trustedOnFirstLoad = await getConfig(ConfigKey.TRUSTED_FIRST_LOAD);
+
+                if (firstLoad && trustedOnFirstLoad === 'yes') {
+                    this.trustedUsers.push(username);
+                } else {
+                    this.pendingApproval.push(username);
+                }
             }
 
             // @ts-ignore
@@ -172,26 +179,34 @@ export default class KeyRing extends KeyFetcher {
     /**
      * Load previously "seen" Keybase users from local storage.
      */
-    private async loadUsersFromStorage() {
+    private async loadUsersFromStorage(): Promise<boolean> {
         const trustedUsersStorageKey = `kpj_trusted_signers_${this.domain}`;
         const barredUsersStorageKey = `kpj_barred_signers_${this.domain}`;
 
-        const stored = await browser.storage.local.get({
+        const stored = await browser.storage.sync.get({
             [trustedUsersStorageKey]: "[]",
             [barredUsersStorageKey]: "[]"
         });
 
+        let hasUsers = false;
+
         for (const user of JSON.parse(stored[trustedUsersStorageKey])) {
+            hasUsers = true;
+
             if (!this.trustedUsers.includes(user)) {
                 this.trustedUsers.push(user);
             }
         }
 
         for (const user of JSON.parse(stored[barredUsersStorageKey])) {
+            hasUsers = true;
+
             if (!this.barredUsers.includes(user)) {
                 this.barredUsers.push(user);
             }
         }
+
+        return hasUsers;
     }
 
     /**
@@ -202,7 +217,7 @@ export default class KeyRing extends KeyFetcher {
         const trustedUsersStorageKey = `kpj_trusted_signers_${this.domain}`;
         const barredUsersStorageKey = `kpj_barred_signers_${this.domain}`;
 
-        await browser.storage.local.set({
+        await browser.storage.sync.set({
             [trustedUsersStorageKey]: JSON.stringify(this.trustedUsers),
             [barredUsersStorageKey]: JSON.stringify(this.barredUsers)
         });

@@ -18,6 +18,14 @@
     "default_title": "CryptoScript",
     "default_popup": "src/popup/index.html"
   },
+  "options_ui": {
+    "page": "src/options/index.html"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "kpjs@oily.dev"
+    }
+  },
   "permissions": [
     "<all_urls>",
     "https://keybase.io/*",
