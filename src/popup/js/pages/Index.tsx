@@ -6,24 +6,38 @@ import { AllowUserEvent, DeniedUserEvent } from '../../../common/GetUsersAwaitin
 import Avatar from '@material-ui/core/Avatar';
 import Chip from '@material-ui/core/Chip';
 import FaceIcon from '@material-ui/icons/Face';
+import { MuiThemeProvider, createMuiTheme } from '@material-ui/core/styles';
+import green from '@material-ui/core/colors/green';
+import red from '@material-ui/core/colors/red';
+import Typography from '@material-ui/core/Typography';
+import DoneIcon from '@material-ui/icons/Done';
+import { KeybaseUser } from '../../../common/KeybaseUser';
+
 
 interface ToolbarProps {
 }
 
 interface ToolbarState {
     domain: string,
-    keybaseUsers: string[],
+    keybaseUsers: {[name: string]: KeybaseUser},
     trustedUsers: string[],
     barredUsers: string[],
     needsApproval: string[]
 }
+
+const pillTheme = createMuiTheme({
+    palette: {
+        primary: green,
+        secondary: red
+    },
+});
 
 export class Index extends React.Component<ToolbarProps, ToolbarState> {
     constructor(props: any) {
         super(props);
         this.state = {
             domain: "",
-            keybaseUsers: [],
+            keybaseUsers: {},
             trustedUsers: [],
             barredUsers: [],
             needsApproval: []
@@ -69,38 +83,57 @@ export class Index extends React.Component<ToolbarProps, ToolbarState> {
 
     render() {
         return <div className="container">
-            <Row header="Trusted Keybase Users">
-                { this.state.trustedUsers.map((u) => (
+            <MuiThemeProvider theme={pillTheme}>
+                <div>
+                    <Typography variant="h6" color="inherit">Trusted Users</Typography>
+                    { this.state.trustedUsers.map((u) => (
+                        <Chip
+                            avatar={
+                                <Avatar src={this.state.keybaseUsers[u].avatar}>
+                                    {!this.state.keybaseUsers[u].avatar ? <FaceIcon /> : ''}
+                                </Avatar>
+                            }
+                            color="primary"
+                            label={u}
+                            onClick={() => alert('clicked')}
+                            onDelete={() => this.deny(u)} />
+                    )) }
+                </div>
+
+                <div>
+                    <Typography variant="h6" color="inherit">Barred Users</Typography>
+                    { this.state.barredUsers.map((u) => (
+                        <Chip
+                            avatar={
+                                <Avatar src={this.state.keybaseUsers[u].avatar}>
+                                    {!this.state.keybaseUsers[u].avatar ? <FaceIcon /> : ''}
+                                </Avatar>
+                            }
+                            color="secondary"
+                            label={u}
+                            onClick={() => alert('clicked')}
+                            onDelete={() => this.approve(u)}
+                            deleteIcon={<DoneIcon />} />
+                    )) }
+                </div>
+            </MuiThemeProvider>
+
+            <div>
+                <Typography variant="h6" color="inherit">Needs Approval</Typography>
+                { this.state.needsApproval.map((u) => (
                     <Chip
                         avatar={
-                            <Avatar>
-                                <FaceIcon />
+                            <Avatar src={this.state.keybaseUsers[u].avatar}>
+                                {!this.state.keybaseUsers[u].avatar ? <FaceIcon /> : ''}
                             </Avatar>
                         }
                         color="primary"
                         label={u}
                         onClick={() => alert('clicked')}
-                        onDelete={() => this.deny(u)} />
+                        onDelete={() => this.approve(u)}
+                        deleteIcon={<DoneIcon />} />
                 )) }
-            </Row>
-            <Row header="Barred Keybase Users">
-                <ul>
-                    { this.state.barredUsers.map((u) => <li>
-                        { u }&nbsp;
-                        <a href="#" onClick={ e => this.approve(u) } style={{ color: '#4CAF50' }}>approve</a>
-                    </li>) }
-                </ul>
-            </Row>
-            <Row header="Needs Approval">
-                <ul>
-                    { this.state.needsApproval.map((u) => <li>
-                        { u }&nbsp;
-                        <a href="#" onClick={ e => this.approve(u) } style={{ color: '#4CAF50' }}>approve</a>&nbsp;
-                        <a href="#" onClick={ e => this.deny(u) } style={{ color: '#F44336' }}>deny</a>
-                    </li>) }
-                </ul>
-            </Row>
-
+            </div>
         </div>;
     }
 }

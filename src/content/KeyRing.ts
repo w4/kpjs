@@ -2,6 +2,7 @@ import * as P from "bluebird";
 import { Buffer, KeyFetcher, KeyManager } from "kbpgp";
 import { PendingSignerError } from "./PendingSignerError";
 import { getConfig, ConfigKey } from "../common/config";
+import { KeybaseUser, Proof } from "../common/KeybaseUser";
 
 const importFromArmoredPgp = P.promisify<KeyManager, { armored: string }>(KeyManager.import_from_armored_pgp, {
     context: KeyManager
@@ -12,7 +13,7 @@ export default class KeyRing extends KeyFetcher {
         [kid: string]: {
             keyManager: KeyManager;
             key: any;
-            keybaseUser: string;
+            keybaseUser: KeybaseUser;
         };
     } = {};
 
@@ -33,11 +34,21 @@ export default class KeyRing extends KeyFetcher {
 
         return [
             ...new Set([
-                ...Object.values(this.allKeyIdsForDomainFromKeybase).map(k => k.keybaseUser),
+                ...Object.values(this.allKeyIdsForDomainFromKeybase).map(k => k.keybaseUser.name),
                 ...(await this.getTrustedUsers()),
                 ...(await this.getBarredUsers())
             ])
         ];
+    }
+
+    public async getAllCurrentKeybaseOwners() {
+        await this.populateKeysForDomain();
+
+        return Object.values(this.allKeyIdsForDomainFromKeybase)
+            .reduce((acc: {[name: string]: KeybaseUser}, k) => {
+                acc[k.keybaseUser.name] = k.keybaseUser;
+                return acc;
+            }, {});
     }
 
     /**
@@ -103,19 +114,19 @@ export default class KeyRing extends KeyFetcher {
             const k = this.allKeyIdsForDomainFromKeybase[kid];
 
             if (k && k.key && k.key.key) {
-                if (this.barredUsers.includes(k.keybaseUser)) {
+                if (this.barredUsers.includes(k.keybaseUser.name)) {
                     return cb(
-                        new Error(`Keybase user ${k.keybaseUser} is barred from signing scripts from ${this.domain}`),
+                        new Error(`Keybase user ${k.keybaseUser.name} is barred from signing scripts from ${this.domain}`),
                         k.keyManager,
                         i
                     );
-                } else if (this.pendingApproval.includes(k.keybaseUser)) {
+                } else if (this.pendingApproval.includes(k.keybaseUser.name)) {
                     return cb(
-                        new PendingSignerError(`Keybase user ${k.keybaseUser} is not yet approved for script signing on ${this.domain}`),
+                        new PendingSignerError(`Keybase user ${k.keybaseUser.name} is not yet approved for script signing on ${this.domain}`),
                         k.keyManager,
                         i
                     );
-                } else if (this.trustedUsers.includes(k.keybaseUser) && k.key.key.can_perform(ops)) {
+                } else if (this.trustedUsers.includes(k.keybaseUser.name) && k.key.key.can_perform(ops)) {
                     console.debug(`Allowing script from ${this.domain} to run as it was signed by ${k.keybaseUser}`);
                     return k.keyManager.fetch(ids, ops, cb);
                 }
@@ -167,7 +178,20 @@ export default class KeyRing extends KeyFetcher {
                     this.allKeyIdsForDomainFromKeybase[kid] = {
                         key,
                         keyManager: km,
-                        keybaseUser: username
+                        keybaseUser: {
+                            name: username,
+                            avatar: (user.pictures.primary || Object.entries(user.basics.pictures)[0] || {})['url'],
+                            proofs: Object.entries(user.proofs_summary.by_presentation_group)
+                                .reduce((acc: {[name: string]: KeybaseUser}, [k, v]: [string, any]) => {
+                                    acc[k] = {
+                                        type: v.proof_type,
+                                        name: v.nametag,
+                                        state: v.state,
+                                        url: v.human_url
+                                    } as any;
+                                    return acc;
+                                }, {})
+                        }
                     };
                 }
             }

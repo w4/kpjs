@@ -1,4 +1,5 @@
 import { IEvent } from "./IEvent";
+import { KeybaseUser } from "./KeybaseUser";
 
 export class GetKeybaseUserForDomainEvent extends IEvent {
     public static readonly TYPE = "GET_KEYBASE_USER_FOR_DOMAIN";
@@ -8,13 +9,11 @@ export class GetKeybaseUserForDomainEvent extends IEvent {
     }
 }
 
-type KeybaseUser = string;
-
 export class GetKeybaseUserForDomainResponse {
     constructor(
-        public readonly keybaseUsers: KeybaseUser[],
-        public readonly trusted: KeybaseUser[],
-        public readonly barred: KeybaseUser[],
-        public readonly pending: KeybaseUser[],
+        public readonly keybaseUsers: {[name: string]: KeybaseUser},
+        public readonly trusted: string[],
+        public readonly barred: string[],
+        public readonly pending: string[],
     ) {}
 }

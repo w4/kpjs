@@ -25,7 +25,7 @@ export default new class ScriptInterceptor implements EventListenerObject {
                 const keyRing = this.getKeyRingForDomain(event.domain);
 
                 return new GetKeybaseUserForDomainResponse(
-                    await keyRing.getKeybaseUsers(),
+                    await keyRing.getAllCurrentKeybaseOwners(),
                     await keyRing.getTrustedUsers(),
                     await keyRing.getBarredUsers(),
                     await keyRing.getPendingApproval()
