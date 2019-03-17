@@ -181,14 +181,17 @@ export default class KeyRing extends KeyFetcher {
                         keybaseUser: {
                             name: username,
                             avatar: (user.pictures.primary || Object.entries(user.basics.pictures)[0] || {})['url'],
+                            realName: user.profile.full_name,
+                            location: user.profile.location,
                             proofs: Object.entries(user.proofs_summary.by_presentation_group)
-                                .reduce((acc: {[name: string]: KeybaseUser}, [k, v]: [string, any]) => {
-                                    acc[k] = {
-                                        type: v.proof_type,
-                                        name: v.nametag,
-                                        state: v.state,
-                                        url: v.human_url
-                                    } as any;
+                                .reduce((acc: {[name: string]: Proof[]}, [k, v]: [string, any[]]) => {
+                                    acc[k] = v.map(p => ({
+                                        type: p.proof_type,
+                                        name: p.nametag,
+                                        state: p.state,
+                                        url: p.human_url,
+                                        tag: p.presentation_tag
+                                    }));
                                     return acc;
                                 }, {})
                         }

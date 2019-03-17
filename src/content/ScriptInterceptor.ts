@@ -62,7 +62,6 @@ export default new class ScriptInterceptor implements EventListenerObject {
 
             try {
                 this.lock = true;
-
                 await this.checkPermissionMaybeExecute(script);
             } catch (e) {
                 console.error(`Execution of script (${script.src || "inline"}) failed. ${e.name}: ${e.message}`, e.stack);
@@ -71,7 +70,7 @@ export default new class ScriptInterceptor implements EventListenerObject {
                 this.lock = false;
                 clearInterval(monitor);
             }
-        }, 10);
+        }, 0);
     }
 
     private async updateBadgeCount() {
@@ -167,6 +166,11 @@ export default new class ScriptInterceptor implements EventListenerObject {
                 }
             }
         }
+
+        window.document.dispatchEvent(new Event("DOMContentLoaded", {
+            bubbles: true,
+            cancelable: true
+        }));
     }
 
     /**

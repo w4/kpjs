@@ -16,6 +16,10 @@ import ErrorOutlinedIcon from '@material-ui/icons/ErrorOutlined';
 import { KeybaseUser } from '../../../common/KeybaseUser';
 import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button, withMobileDialog } from '@material-ui/core';
 import Slide from '@material-ui/core/Slide';
+import { Redirect } from 'react-router';
+
+import AppBar from '@material-ui/core/AppBar';
+import Toolbar from '@material-ui/core/Toolbar';
 
 function Transition(props: any) {
   return <Slide direction="up" {...props} />;
@@ -32,6 +36,7 @@ interface ToolbarState {
     needsApproval: string[],
     requiresApprovalDialogOpen: boolean,
     requiresApprovalDialogUser: string,
+    redirectToProfile: string,
 }
 
 const pillTheme = createMuiTheme({
@@ -51,7 +56,8 @@ export default class Index extends React.Component<ToolbarProps, ToolbarState> {
             barredUsers: [],
             needsApproval: [],
             requiresApprovalDialogOpen: false,
-            requiresApprovalDialogUser: ''
+            requiresApprovalDialogUser: '',
+            redirectToProfile: '',
         };
     }
 
@@ -105,14 +111,14 @@ export default class Index extends React.Component<ToolbarProps, ToolbarState> {
 
     getClickActionForUser = (name: string) => () => {
         // TODO: open profile
+        this.setState({
+            redirectToProfile: name
+        });
     };
 
     getButtonActionForUser = (name: string) => () => {
         if (this.state.trustedUsers.includes(name)) {
             this.deny(name);
-        } else if (this.state.barredUsers.includes(name)) {
-            // TODO: show dialog to confirm action
-            this.approve(name);
         } else {
             this.setState({
                 requiresApprovalDialogUser: name,
@@ -132,52 +138,66 @@ export default class Index extends React.Component<ToolbarProps, ToolbarState> {
     };
 
     render() {
-        return <div className="container" style={{minHeight: '11rem'}}>
-            <MuiThemeProvider theme={pillTheme}>
-                { Object.entries(this.state.keybaseUsers).map(([name, u]) => (
-                    <Chip
-                        style={{margin: '1px'}}
-                        avatar={
-                            <Avatar src={u.avatar}>
-                                {!u.avatar ? <FaceIcon /> : ''}
-                            </Avatar>
-                        }
-                        color={
-                            this.state.barredUsers.includes(name)
-                                ? 'secondary'
-                                : (this.state.trustedUsers.includes(name)
-                                    ? 'primary'
-                                    : 'inherit')
-                        }
-                        label={name}
-                        onClick={this.getClickActionForUser(name)}
-                        onDelete={this.getButtonActionForUser(name)}
-                        deleteIcon={this.getButtonIconForUser(name)} />
-                )) }
-            </MuiThemeProvider>
+        if (this.state.redirectToProfile) {
+            return <Redirect to={`/user/${this.state.redirectToProfile}`} />
+        }
 
-            <Dialog
-                fullScreen
-                open={this.state.requiresApprovalDialogOpen}
-                onClose={this.requiresApprovalDialogClose.bind(this, null, null)}
-                TransitionComponent={Transition}
-                aria-labelledby="alert-dialog-title"
-                aria-describedby="alert-dialog-description">
-                <DialogTitle id="alert-dialog-title">Allow scripts from {this.state.requiresApprovalDialogUser}?</DialogTitle>
-                <DialogContent>
-                    <DialogContentText id="alert-dialog-description">
-                        This will allow all scripts signed by this user to run on this website now and in the future.
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={this.requiresApprovalDialogClose.bind(this, true, this.state.requiresApprovalDialogUser)} color="primary">
-                        Allow
-                    </Button>
-                    <Button onClick={this.requiresApprovalDialogClose.bind(this, false, this.state.requiresApprovalDialogUser)} color="secondary">
-                        Deny
-                    </Button>
-                </DialogActions>
-            </Dialog>
+        return <div>
+            <AppBar position="static">
+                <Toolbar variant="dense">
+                    <Typography variant="h6" color="inherit">
+                        KPJS
+                    </Typography>
+                </Toolbar>
+            </AppBar>
+
+            <div className="container" style={{minHeight: '11rem'}}>
+                <MuiThemeProvider theme={pillTheme}>
+                    { Object.entries(this.state.keybaseUsers).map(([name, u]) => (
+                        <Chip
+                            style={{margin: '1px'}}
+                            avatar={
+                                <Avatar src={u.avatar}>
+                                    {!u.avatar ? <FaceIcon /> : ''}
+                                </Avatar>
+                            }
+                            color={
+                                this.state.barredUsers.includes(name)
+                                    ? 'secondary'
+                                    : (this.state.trustedUsers.includes(name)
+                                        ? 'primary'
+                                        : 'inherit')
+                            }
+                            label={name}
+                            onClick={this.getClickActionForUser(name)}
+                            onDelete={this.getButtonActionForUser(name)}
+                            deleteIcon={this.getButtonIconForUser(name)} />
+                    )) }
+                </MuiThemeProvider>
+
+                <Dialog
+                    fullScreen
+                    open={this.state.requiresApprovalDialogOpen}
+                    onClose={this.requiresApprovalDialogClose.bind(this, null, null)}
+                    TransitionComponent={Transition}
+                    aria-labelledby="alert-dialog-title"
+                    aria-describedby="alert-dialog-description">
+                    <DialogTitle id="alert-dialog-title">Allow scripts from {this.state.requiresApprovalDialogUser}?</DialogTitle>
+                    <DialogContent>
+                        <DialogContentText id="alert-dialog-description">
+                            This will allow all scripts signed by this user to run on this website now and in the future.
+                        </DialogContentText>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={this.requiresApprovalDialogClose.bind(this, true, this.state.requiresApprovalDialogUser)} color="primary">
+                            Allow
+                        </Button>
+                        <Button onClick={this.requiresApprovalDialogClose.bind(this, false, this.state.requiresApprovalDialogUser)} color="secondary">
+                            Deny
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+            </div>
         </div>;
     }
 }
