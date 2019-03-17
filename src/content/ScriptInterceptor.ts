@@ -5,8 +5,7 @@ import { GetKeybaseUserForDomainEvent, GetKeybaseUserForDomainResponse } from ".
 import { IEvent } from "../common/IEvent";
 import KeyRing from "./KeyRing";
 import { fetch } from "./util";
-import { GetUsersAwaitingConsentEvent, GetUsersAwaitingConsentResponse, AllowUserEvent, DeniedUserEvent } from "../common/GetUsersAwaitingConsentEvent";
-import { Script } from "../common/Script";
+import { AllowUserEvent, DeniedUserEvent } from "../common/GetUsersAwaitingConsentEvent";
 import { PendingSignerError } from "./PendingSignerError";
 import { getConfig, ConfigKey } from "../common/config";
 
@@ -30,17 +29,15 @@ export default new class ScriptInterceptor implements EventListenerObject {
                     await keyRing.getBarredUsers(),
                     await keyRing.getPendingApproval()
                 );
-            } else if (message.TYPE === GetUsersAwaitingConsentEvent.TYPE) {
-                const event = message as GetUsersAwaitingConsentEvent;
-                const keyRing = this.getKeyRingForDomain(event.domain);
-                return new GetUsersAwaitingConsentResponse(await keyRing.getPendingApproval());
             } else if (message.TYPE === AllowUserEvent.TYPE) {
                 const event = message as AllowUserEvent;
                 this.getKeyRingForDomain(event.domain).addTrustedUser(event.user);
+                this.updateBadgeCount();
                 await this.drainScriptQueue();
             } else if (message.TYPE === DeniedUserEvent.TYPE) {
                 const event = message as DeniedUserEvent;
                 this.getKeyRingForDomain(event.domain).addBarredUser(event.user);
+                this.updateBadgeCount();
                 await this.drainScriptQueue();
             }
         });
@@ -75,6 +72,44 @@ export default new class ScriptInterceptor implements EventListenerObject {
                 clearInterval(monitor);
             }
         }, 10);
+    }
+
+    private async updateBadgeCount() {
+        /*const activeTab = await browser.runtime.sendMessage(new GetTabEvent());
+        const domain = new URL(activeTab.url).host;
+
+        const keyRing = this.getKeyRingForDomain(domain);
+
+        if ((await keyRing.getPendingApproval()).length > 0) {
+            browser.browserAction.setBadgeText({
+                text: '' + (await keyRing.getPendingApproval()).length,
+                tabId: activeTab.id
+            });
+            browser.browserAction.setBadgeBackgroundColor({
+                color: indigo[700],
+                tabId: activeTab.id
+            });
+        } else if ((await keyRing.getBarredUsers()).length > 0) {
+            browser.browserAction.setBadgeText({
+                text: '' + (await keyRing.getBarredUsers()).length,
+                tabId: activeTab.id
+            });
+            browser.browserAction.setBadgeBackgroundColor({
+                color: red[700],
+                tabId: activeTab.id
+            });
+        } else if ((await keyRing.getTrustedUsers()).length > 0) {
+            browser.browserAction.setBadgeText({
+                text: '' + (await keyRing.getTrustedUsers()).length,
+                tabId: activeTab.id
+            });
+            browser.browserAction.setBadgeBackgroundColor({
+                color: green[700],
+                tabId: activeTab.id
+            });
+        } else {
+            browser.browserAction.setBadgeText({text: ''});
+        }*/
     }
 
     private async checkPermissionMaybeExecute(script: HTMLScriptElement) {
@@ -161,7 +196,11 @@ export default new class ScriptInterceptor implements EventListenerObject {
 
         const keyRing = this.getKeyRingForDomain(domain);
 
-        if (!(await keyRing.getKeybaseUsers()).length) {
+        const users = await keyRing.getKeybaseUsers();
+
+        this.updateBadgeCount();
+
+        if (!users.length) {
             if (await this.getTreatmentForUnsignedDomain(domain)) {
                 return true;
             } else {

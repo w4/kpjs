@@ -10,9 +10,16 @@ import { MuiThemeProvider, createMuiTheme } from '@material-ui/core/styles';
 import green from '@material-ui/core/colors/green';
 import red from '@material-ui/core/colors/red';
 import Typography from '@material-ui/core/Typography';
-import DoneIcon from '@material-ui/icons/Done';
+import CheckIcon from '@material-ui/icons/Check';
+import CloseIcon from '@material-ui/icons/Close';
+import ErrorOutlinedIcon from '@material-ui/icons/ErrorOutlined';
 import { KeybaseUser } from '../../../common/KeybaseUser';
+import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button, withMobileDialog } from '@material-ui/core';
+import Slide from '@material-ui/core/Slide';
 
+function Transition(props: any) {
+  return <Slide direction="up" {...props} />;
+}
 
 interface ToolbarProps {
 }
@@ -22,7 +29,9 @@ interface ToolbarState {
     keybaseUsers: {[name: string]: KeybaseUser},
     trustedUsers: string[],
     barredUsers: string[],
-    needsApproval: string[]
+    needsApproval: string[],
+    requiresApprovalDialogOpen: boolean,
+    requiresApprovalDialogUser: string,
 }
 
 const pillTheme = createMuiTheme({
@@ -32,7 +41,7 @@ const pillTheme = createMuiTheme({
     },
 });
 
-export class Index extends React.Component<ToolbarProps, ToolbarState> {
+export default class Index extends React.Component<ToolbarProps, ToolbarState> {
     constructor(props: any) {
         super(props);
         this.state = {
@@ -40,7 +49,9 @@ export class Index extends React.Component<ToolbarProps, ToolbarState> {
             keybaseUsers: {},
             trustedUsers: [],
             barredUsers: [],
-            needsApproval: []
+            needsApproval: [],
+            requiresApprovalDialogOpen: false,
+            requiresApprovalDialogUser: ''
         };
     }
 
@@ -70,6 +81,7 @@ export class Index extends React.Component<ToolbarProps, ToolbarState> {
     }
 
     approve = async (user: string) => {
+        // TODO: get approval
         const [ activeTab ] = await browser.tabs.query({ active: true });
         browser.tabs.sendMessage(activeTab.id, new AllowUserEvent(this.state.domain, user))
             .then(this.updateUsers.bind(this));
@@ -81,59 +93,91 @@ export class Index extends React.Component<ToolbarProps, ToolbarState> {
             .then(this.updateUsers.bind(this));
     }
 
+    requiresApprovalDialogClose = (approved: boolean, user: string) => {
+        if (approved == true) {
+            this.approve(user);
+        } else if (approved == false) {
+            this.deny(user);
+        }
+
+        this.setState({ requiresApprovalDialogOpen: false });
+    };
+
+    getClickActionForUser = (name: string) => () => {
+        // TODO: open profile
+    };
+
+    getButtonActionForUser = (name: string) => () => {
+        if (this.state.trustedUsers.includes(name)) {
+            this.deny(name);
+        } else if (this.state.barredUsers.includes(name)) {
+            // TODO: show dialog to confirm action
+            this.approve(name);
+        } else {
+            this.setState({
+                requiresApprovalDialogUser: name,
+                requiresApprovalDialogOpen: true
+            });
+        }
+    };
+
+    getButtonIconForUser = (name: string) => {
+        if (this.state.trustedUsers.includes(name)) {
+            return <CloseIcon />; // default button
+        } else if (this.state.barredUsers.includes(name)) {
+            return <CheckIcon />;
+        } else {
+            return <ErrorOutlinedIcon />
+        }
+    };
+
     render() {
-        return <div className="container">
+        return <div className="container" style={{minHeight: '11rem'}}>
             <MuiThemeProvider theme={pillTheme}>
-                <div>
-                    <Typography variant="h6" color="inherit">Trusted Users</Typography>
-                    { this.state.trustedUsers.map((u) => (
-                        <Chip
-                            avatar={
-                                <Avatar src={this.state.keybaseUsers[u].avatar}>
-                                    {!this.state.keybaseUsers[u].avatar ? <FaceIcon /> : ''}
-                                </Avatar>
-                            }
-                            color="primary"
-                            label={u}
-                            onClick={() => alert('clicked')}
-                            onDelete={() => this.deny(u)} />
-                    )) }
-                </div>
-
-                <div>
-                    <Typography variant="h6" color="inherit">Barred Users</Typography>
-                    { this.state.barredUsers.map((u) => (
-                        <Chip
-                            avatar={
-                                <Avatar src={this.state.keybaseUsers[u].avatar}>
-                                    {!this.state.keybaseUsers[u].avatar ? <FaceIcon /> : ''}
-                                </Avatar>
-                            }
-                            color="secondary"
-                            label={u}
-                            onClick={() => alert('clicked')}
-                            onDelete={() => this.approve(u)}
-                            deleteIcon={<DoneIcon />} />
-                    )) }
-                </div>
-            </MuiThemeProvider>
-
-            <div>
-                <Typography variant="h6" color="inherit">Needs Approval</Typography>
-                { this.state.needsApproval.map((u) => (
+                { Object.entries(this.state.keybaseUsers).map(([name, u]) => (
                     <Chip
+                        style={{margin: '1px'}}
                         avatar={
-                            <Avatar src={this.state.keybaseUsers[u].avatar}>
-                                {!this.state.keybaseUsers[u].avatar ? <FaceIcon /> : ''}
+                            <Avatar src={u.avatar}>
+                                {!u.avatar ? <FaceIcon /> : ''}
                             </Avatar>
                         }
-                        color="primary"
-                        label={u}
-                        onClick={() => alert('clicked')}
-                        onDelete={() => this.approve(u)}
-                        deleteIcon={<DoneIcon />} />
+                        color={
+                            this.state.barredUsers.includes(name)
+                                ? 'secondary'
+                                : (this.state.trustedUsers.includes(name)
+                                    ? 'primary'
+                                    : 'inherit')
+                        }
+                        label={name}
+                        onClick={this.getClickActionForUser(name)}
+                        onDelete={this.getButtonActionForUser(name)}
+                        deleteIcon={this.getButtonIconForUser(name)} />
                 )) }
-            </div>
+            </MuiThemeProvider>
+
+            <Dialog
+                fullScreen
+                open={this.state.requiresApprovalDialogOpen}
+                onClose={this.requiresApprovalDialogClose.bind(this, null, null)}
+                TransitionComponent={Transition}
+                aria-labelledby="alert-dialog-title"
+                aria-describedby="alert-dialog-description">
+                <DialogTitle id="alert-dialog-title">Allow scripts from {this.state.requiresApprovalDialogUser}?</DialogTitle>
+                <DialogContent>
+                    <DialogContentText id="alert-dialog-description">
+                        This will allow all scripts signed by this user to run on this website now and in the future.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={this.requiresApprovalDialogClose.bind(this, true, this.state.requiresApprovalDialogUser)} color="primary">
+                        Allow
+                    </Button>
+                    <Button onClick={this.requiresApprovalDialogClose.bind(this, false, this.state.requiresApprovalDialogUser)} color="secondary">
+                        Deny
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </div>;
     }
 }

@@ -7,6 +7,7 @@
     {
       "matches": ["<all_urls>"],
       "js": [
+        "dist/vendors~content.js",
         "dist/content.js"
       ],
       "all_frames": true,
@@ -16,10 +17,10 @@
   "browser_action": {
     "browser_style": true,
     "default_title": "CryptoScript",
-    "default_popup": "src/popup/index.html"
+    "default_popup": "dist/popup.html"
   },
   "options_ui": {
-    "page": "src/options/index.html"
+    "page": "dist/options.html"
   },
   "browser_specific_settings": {
     "gecko": {
