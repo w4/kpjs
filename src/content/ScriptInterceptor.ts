@@ -167,10 +167,12 @@ export default new class ScriptInterceptor implements EventListenerObject {
             }
         }
 
-        window.document.dispatchEvent(new Event("DOMContentLoaded", {
-            bubbles: true,
-            cancelable: true
-        }));
+        setTimeout(() => {
+            window.document.dispatchEvent(new Event("DOMContentLoaded", {
+                bubbles: true,
+                cancelable: true
+            }));
+        }, 0);
     }
 
     /**
