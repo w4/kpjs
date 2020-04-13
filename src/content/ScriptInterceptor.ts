@@ -199,10 +199,15 @@ export default new class ScriptInterceptor implements EventListenerObject {
         const signaturePath = script.dataset.signature;
 
         const keyRing = this.getKeyRingForDomain(domain);
+        console.log("keyring", keyRing);
 
         const users = await keyRing.getKeybaseUsers();
+        console.log("users", users);
 
         this.updateBadgeCount();
+
+
+        console.log('yolo');
 
         if (!users.length) {
             if (await this.getTreatmentForUnsignedDomain(domain)) {
@@ -222,13 +227,19 @@ export default new class ScriptInterceptor implements EventListenerObject {
             }
         }
 
+        console.log('iya');
+
         const signatureContent = await (await fetch(signaturePath)).text();
+
+        console.log('der');
 
         const literals = await unbox({
             armored: new KbpgpBuffer(signatureContent),
             data: new KbpgpBuffer(scriptContent),
             keyfetch: keyRing
         });
+
+        console.log('yo');
 
         if (literals[0] && literals[0].get_data_signer()) {
             const km = literals[0].get_data_signer().get_key_manager();

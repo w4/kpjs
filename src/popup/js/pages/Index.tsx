@@ -10,6 +10,7 @@ import { MuiThemeProvider, createMuiTheme } from '@material-ui/core/styles';
 import green from '@material-ui/core/colors/green';
 import red from '@material-ui/core/colors/red';
 import Typography from '@material-ui/core/Typography';
+import Skeleton from '@material-ui/lab/Skeleton';
 import CheckIcon from '@material-ui/icons/Check';
 import CloseIcon from '@material-ui/icons/Close';
 import ErrorOutlinedIcon from '@material-ui/icons/ErrorOutlined';
@@ -30,6 +31,7 @@ interface ToolbarProps {
 
 interface ToolbarState {
     domain: string,
+    loaded: boolean,
     keybaseUsers: {[name: string]: KeybaseUser},
     trustedUsers: string[],
     barredUsers: string[],
@@ -51,6 +53,7 @@ export default class Index extends React.Component<ToolbarProps, ToolbarState> {
         super(props);
         this.state = {
             domain: "",
+            loaded: false,
             keybaseUsers: {},
             trustedUsers: [],
             barredUsers: [],
@@ -78,6 +81,7 @@ export default class Index extends React.Component<ToolbarProps, ToolbarState> {
         await browser.tabs.sendMessage(activeTab.id, new GetKeybaseUserForDomainEvent(this.state.domain))
             .then((res: GetKeybaseUserForDomainResponse) => {
                 this.setState({
+                    loaded: true,
                     keybaseUsers: res.keybaseUsers,
                     trustedUsers: res.trusted,
                     barredUsers: res.barred,
@@ -145,7 +149,7 @@ export default class Index extends React.Component<ToolbarProps, ToolbarState> {
         return <div>
             <AppBar position="static">
                 <Toolbar variant="dense">
-                    <Typography variant="h6" color="inherit">
+                    <Typography variant="h6" color="inherit" style={{ marginTop: '-.3rem' }}>
                         KPJS
                     </Typography>
                 </Toolbar>
@@ -153,7 +157,7 @@ export default class Index extends React.Component<ToolbarProps, ToolbarState> {
 
             <div className="container" style={{minHeight: '11rem'}}>
                 <MuiThemeProvider theme={pillTheme}>
-                    { Object.entries(this.state.keybaseUsers).map(([name, u]) => (
+                    { this.state.loaded ? Object.entries(this.state.keybaseUsers).map(([name, u]) => (
                         <Chip
                             style={{margin: '1px'}}
                             avatar={
@@ -172,7 +176,11 @@ export default class Index extends React.Component<ToolbarProps, ToolbarState> {
                             onClick={this.getClickActionForUser(name)}
                             onDelete={this.getButtonActionForUser(name)}
                             deleteIcon={this.getButtonIconForUser(name)} />
-                    )) }
+                    )) : <div style={{ display: 'flex' }}>
+                      <Skeleton variant="rect" style={{ borderRadius: 16, margin: '1px' }} width={100} height={32} />
+                      <Skeleton variant="rect" style={{ borderRadius: 16, margin: '1px' }} width={100} height={32} />
+                      <Skeleton variant="rect" style={{ borderRadius: 16, margin: '1px' }} width={100} height={32} />
+                    </div> }
                 </MuiThemeProvider>
 
                 <Dialog
